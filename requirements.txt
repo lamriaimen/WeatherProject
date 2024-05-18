@@ -1,0 +1,11 @@
+dash==2.9.3
+dash-core-components
+dash-html-components
+dash-renderer
+dash-table
+dash-daq==0.5.0
+gunicorn
+pandas
+numpy
+scikit-learn
+plotly==5.22.0
