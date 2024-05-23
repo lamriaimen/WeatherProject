@@ -10,7 +10,7 @@ import pandas as pd
 import plotly.express as px
 
 
-df_weather = pd.read_csv(os.path.join(os.getcwd(),'.','weatherfact2.csv' ))
+df_weather = pd.read_csv(os.path.join(os.getcwd(),'.','weatherfact.csv' ))
 
 # Load the location data CSV file into a pandas DataFrame
 df_location = pd.read_csv(os.path.join(os.getcwd(),'.','location.csv' ))
@@ -54,6 +54,8 @@ def get_station_icon(station_name):
         return 'tn.png'
     elif 'MO' in station_name:
         return 'mr.png'
+    elif 'SP' in station_name:
+        return 'es.png'
     else:
         return None
 
@@ -107,56 +109,19 @@ app.layout = html.Div(
                 placeholder="Nom de la station"
             ), 
         ]),
-        html.Div(className="inline-dropdown",
-        children=[
-            html.Label('Year', className="label-dropdown"),
-            dcc.Dropdown(
-                id='year-dropdown',
-                options=[{'label': i, 'value': i} for i in years],
-                value=df['Year'].unique()[0],
-                placeholder="Année"
-            )
-        ]),
-        html.Div(className="inline-dropdown",
-        children=[
-            html.Label('Saison', className="label-dropdown"),
-            dcc.Dropdown(
-                id='season-dropdown',
-                options=[{'label': saisons[i-1], 'value': i} for i in df['Season'].unique()],
-                value=df['Season'].unique()[0],
-                placeholder="Saison"
-            )
-        ]),
-        html.Div(className="inline-dropdown",
-        children=[
-            html.Label('Trimestre', className="label-dropdown"),
-            dcc.Dropdown(
-                id='quarter-dropdown',
-                options=[{'label': f'{i} Trimestre', 'value': i} for i in df['Quarter'].unique()],
-                value=df['Quarter'].unique()[0],
-                placeholder="Trimestre"
-            )
-        ]),
-        html.Div(className="inline-dropdown",
-        children=[
-            html.Label('Month', className="label-dropdown"),
-            dcc.Dropdown(
-                id='month-dropdown',
-                options=[{'label': months[i-1], 'value': i} for i in df['Month'].unique()],
-                value=df['Month'].unique()[0],
-                placeholder="Mois"
-            )
-        ]),
-        daq.BooleanSwitch(
-            className="inline-dropdown",
-            id='toggle-switch',
-            #value=False,
-            label="Graph / Map",
-            
-            color="blue"
-        )
+        html.Label("Séléctionnez une plage d'année", className="label-dropdown"),
+        dcc.RangeSlider(
+            id='range-slider',
+            min=min(years),
+            max=max(years),
+            value=[min(years),max(years)],
+            marks={str(i): str(i) for i in years if i % 10==0},
+            step=1,
+            tooltip={"placement":"bottom","always_visible":True}, 
+        ),
     ], 
     className='dropdown-container'),
+    #dcc.Graph(id='weather-graph'),
     dcc.Graph(id='weather-graph'),
     html.Div(id="div-map",
         children=[
@@ -173,6 +138,36 @@ app.layout = html.Div(
                 step=1,
                 tooltip={"placement":"bottom","always_visible":True},    
             ),
+        ]),
+        html.Div(className="inline-dropdown",
+        children=[
+            html.Label('Saison', className="label-dropdown2"),
+            dcc.Dropdown(
+                id='season-dropdown',
+                options=[{'label': saisons[i-1], 'value': i} for i in df['Season'].unique()],
+                value=df['Season'].unique()[0],
+                placeholder="Saison"
+            )
+        ]),
+        html.Div(className="inline-dropdown",
+        children=[
+            html.Label('Trimestre', className="label-dropdown2"),
+            dcc.Dropdown(
+                id='quarter-dropdown',
+                options=[{'label': f'{i} Trimestre', 'value': i} for i in df['Quarter'].unique()],
+                value=df['Quarter'].unique()[0],
+                placeholder="Trimestre"
+            )
+        ]),
+        html.Div(className="inline-dropdown",
+        children=[
+            html.Label('Month', className="label-dropdown2"),
+            dcc.Dropdown(
+                id='month-dropdown',
+                options=[{'label': months[i-1], 'value': i} for i in df['Month'].unique()],
+                value=df['Month'].unique()[0],
+                placeholder="Mois"
+            )
         ]),
         html.Div(id="attribute-map-div",
             children=[
@@ -192,31 +187,98 @@ app.layout = html.Div(
 ])
 
 # Mise à jour du graphique météo en fonction de la station sélectionnée
-""" @app.callback(
+@app.callback(
     Output('weather-graph', 'figure'),
-    [Input('station-dropdown', 'value')]
+    [Input('station-dropdown', 'value'),
+     Input('range-slider', 'value')]
 )
-def update_weather_graph(selected_station):
-    filtered_df = df[df['STATION'] == selected_station]
-    
-    fig = {
-        'data': [
-            {'x': filtered_df['DATE'], 'y': filtered_df['PRCP'], 'type': 'bar', 'name': 'Précipitation'},
-            {'x': filtered_df['DATE'], 'y': filtered_df['TAVG'], 'type': 'line', 'name': 'Température moyenne'},
-            {'x': filtered_df['DATE'], 'y': filtered_df['TMAX'], 'type': 'line', 'name': 'Température maximale'},
-            {'x': filtered_df['DATE'], 'y': filtered_df['TMIN'], 'type': 'line', 'name': 'Température minimale'}
-        ],
-        'layout': {
-            'title': f'Données météorologiques pour la station {station_name_to_id[selected_station]}',
+def update_weather_graph(selected_station,year_slider):
+    start_year, end_year = year_slider
+    filtered_df = df[(df['STATION'] == selected_station) &
+                     (df['DATE'] >= pd.to_datetime(f'{start_year}-01-01')) &
+                     (df['DATE'] <= pd.to_datetime(f'{end_year}-12-31'))]
+    fig = go.Figure()
+    #print(filtered_df)
+    # Add precipitation bar trace
+    fig.add_trace(
+        go.Bar(
+            x=filtered_df['DATE'],
+            y=filtered_df['PRCP'],
+            name='Précipitation',
+            hoverinfo='x+y'
+        )
+    )
 
-            'xaxis': {'title': 'Date'},
-            'yaxis': {'title': 'Valeur'}
-        }
-    }
-    return fig """
+    # Add average temperature line trace
+    fig.add_trace(
+        go.Scatter(
+            x=filtered_df['DATE'],
+            y=filtered_df['TAVG'],
+            mode='lines',
+            name='Température moyenne',
+            hoverinfo='x+y',
+        )
+    )
+
+    # Add maximum temperature line trace
+    fig.add_trace(
+        go.Scatter(
+            x=filtered_df['DATE'],
+            y=filtered_df['TMAX'],
+            mode='lines',
+            name='Température maximale',
+            hoverinfo='x+y'
+        )
+    )
+
+    # Add minimum temperature line trace
+    fig.add_trace(
+        go.Scatter(
+            x=filtered_df['DATE'],
+            y=filtered_df['TMIN'],
+            mode='lines',
+            name='Température minimale',
+            hoverinfo='x+y'
+        )
+    )
+
+    # Add minimum temperature line trace
+    fig.add_trace(
+        go.Scatter(
+            x=filtered_df['DATE'],
+            y=filtered_df['SNWD'],
+            mode='lines',
+            name="Épaisseur de la neige",
+            hoverinfo='x+y'
+        )
+    )
+    # Add minimum temperature line trace
+    fig.add_trace(
+        go.Scatter(
+            x=filtered_df['DATE'],
+            y=filtered_df['WSFG'],
+            mode='lines',
+            name="Vitesse maximale du vent en rafale",
+            hoverinfo='x+y'
+        )
+    )
+
+    # Update layout
+    fig.update_layout(
+        title={
+            'text':f'Données météorologiques pour la station {station_name_to_id[selected_station]}',
+            'xanchor': 'center',
+            'x': 0.5,
+        },
+        xaxis_title='Date',
+        yaxis_title='Valeur',
+        hovermode='x',  # ensures hover information appears on all traces at the same x value
+        xaxis=dict(type='date'),
+    )
+    return fig
 
 #--- Another graph for precipitation
-@app.callback(
+""" @app.callback(
     Output('weather-graph', 'figure'),
     [
         Input('station-dropdown', 'value'),
@@ -235,7 +297,7 @@ def update_graph(selected_station, year, season, quarter, month, toggle):
         (df['Quarter'] == quarter) &
         (df['Month'] == month)
     ]
-
+    
     if toggle:
         # Create a bar chart for precipitation
         figure = go.Figure(
@@ -280,7 +342,8 @@ def update_graph(selected_station, year, season, quarter, month, toggle):
             )
         )
 
-    return figure
+    return figure """
+    
 # Mise à jour de la carte en fonction des filtres sélectionnés
 @app.callback(
     Output('map-graph', 'figure'),
@@ -314,20 +377,12 @@ def update_map(selected_year, selected_season, selected_quarter, selected_month,
             color=[[0,'#acd3e0'],[0.5,'#8dc4dc'],[1, '#a6daff']]
         case _:
             color="Viridis"
-    colors=[
-        [0, '#440154'],  # Viridis start
-        [0.1, '#440154'],
-        [0.25, 'red'],   # Custom color start
-        [0.5, 'red'],    # Custom color end
-        [0.75, '#21908C'],  # Viridis continues
-        [1, '#FDE725']
-    ]
     fig = px.density_mapbox(filtered_df, lat='LATITUDE', lon='LONGITUDE', z=z_value,
                         radius=10,  # Ajustez le rayon pour le lissage de densité
                         center={'lat': filtered_df['LATITUDE'].mean(), 'lon': filtered_df['LONGITUDE'].mean()},
                         zoom=4,  # Ajustez le niveau de zoom
                         mapbox_style='carto-positron',  # Choisissez un style de carte Mapbox
-                        color_continuous_scale=color,  # Choisissez l'échelle de couleurs, ici 'OrRd' (orange-rouge)
+                        color_continuous_scale= color,  # Choisissez l'échelle de couleurs, ici 'OrRd' (orange-rouge)
                         range_color=(filtered_df[z_value].min(),filtered_df[z_value].max()),
                         hover_data=["STATION"],
                         
